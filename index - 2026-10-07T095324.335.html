@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boyle's and Charles's gas laws</title>
+<style>
+  :root { --bg:#ffffff; --card:#f4f3ee; --text:#1f1e1d; --muted:#5f5e5a; --edge:#888780; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1f1e1d; --card:#2c2c2a; --text:#f1efe8; --muted:#b4b2a9; --edge:#888780; }
+  }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); margin:0; padding:24px 16px; }
+  main { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 24px; }
+  h2 { font-size: 18px; font-weight: 500; margin: 0 0 8px; }
+  canvas { width:100%; height:auto; display:block; }
+  .row { display:flex; align-items:center; gap:12px; margin:12px 0; }
+  .row label { font-size:14px; color:var(--muted); }
+  .row input { flex:1; }
+  .cards { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:40px; }
+  .card { background:var(--card); border-radius:8px; padding:16px; }
+  .card .l { font-size:13px; color:var(--muted); }
+  .card .v { font-size:24px; font-weight:500; }
+  p.note { font-size:14px; color:var(--muted); line-height:1.6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Boyle's and Charles's gas laws</h1>
+
+  <h2>Boyle's law: squeeze the gas, pressure goes up</h2>
+  <canvas id="boyle" width="680" height="200"></canvas>
+  <div class="row"><label for="vol">Volume</label><input type="range" id="vol" min="20" max="90" value="60" step="1"></div>
+  <div class="cards">
+    <div class="card"><div class="l">Volume</div><div class="v" id="b-v">60 L</div></div>
+    <div class="card"><div class="l">Pressure</div><div class="v" id="b-p">3.0 atm</div></div>
+    <div class="card"><div class="l">Pressure × volume</div><div class="v" id="b-pv">180</div></div>
+  </div>
+
+  <h2>Charles's law: heat the gas, it expands</h2>
+  <canvas id="charles" width="680" height="200"></canvas>
+  <div class="row"><label for="temp">Temperature</label><input type="range" id="temp" min="200" max="400" value="300" step="5"></div>
+  <div class="cards">
+    <div class="card"><div class="l">Temperature</div><div class="v" id="c-t">300 K</div></div>
+    <div class="card"><div class="l">Volume</div><div class="v" id="c-v">15.0 L</div></div>
+    <div class="card"><div class="l">Volume ÷ temperature</div><div class="v" id="c-vt">0.050</div></div>
+  </div>
+
+  <p class="note">Boyle: at constant temperature, pressure × volume stays constant. Charles: at constant pressure, volume ÷ temperature stays constant (temperature in Kelvin). The numbers are simplified for demonstration.</p>
+</main>
+<script>
+var cs = getComputedStyle(document.documentElement);
+var X0 = 30, Y0 = 30, Y1 = 170;
+function mkSim(id) {
+  var cv = document.getElementById(id), ps = [];
+  for (var i = 0; i < 24; i++) {
+    var a = Math.random() * 6.283;
+    ps.push({ x: X0 + 20 + Math.random() * 100, y: Y0 + 10 + Math.random() * (Y1 - Y0 - 20), vx: Math.cos(a), vy: Math.sin(a) });
+  }
+  return { c: cv.getContext('2d'), ps: ps };
+}
+function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+function draw(s, x1, sp, col, dt) {
+  var c = s.c, edge = cs.getPropertyValue('--edge').trim(), solid = cs.getPropertyValue('--muted').trim();
+  c.clearRect(0, 0, 680, 200);
+  s.ps.forEach(function (p) {
+    p.x += p.vx * sp * dt; p.y += p.vy * sp * dt;
+    if (p.x < X0 + 5) { p.x = X0 + 5; p.vx = Math.abs(p.vx); }
+    if (p.x > x1 - 5) { p.x = x1 - 5; p.vx = -Math.abs(p.vx); }
+    if (p.y < Y0 + 5) { p.y = Y0 + 5; p.vy = Math.abs(p.vy); }
+    if (p.y > Y1 - 5) { p.y = Y1 - 5; p.vy = -Math.abs(p.vy); }
+  });
+  c.strokeStyle = edge; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(x1, Y0); c.lineTo(X0, Y0); c.lineTo(X0, Y1); c.lineTo(x1, Y1); c.stroke();
+  c.fillStyle = solid;
+  c.fillRect(x1, Y0 - 4, 10, Y1 - Y0 + 8);
+  c.fillRect(x1 + 10, (Y0 + Y1) / 2 - 3, 50, 6);
+  c.fillRect(x1 + 60, (Y0 + Y1) / 2 - 16, 6, 32);
+  c.fillStyle = col;
+  s.ps.forEach(function (p) { c.beginPath(); c.arc(p.x, p.y, 4, 0, 6.283); c.fill(); });
+}
+var b = mkSim('boyle'), ch = mkSim('charles');
+var vol = 60, temp = 300, last = performance.now();
+function upB() {
+  document.getElementById('b-v').textContent = vol + ' L';
+  document.getElementById('b-p').textContent = (180 / vol).toFixed(1) + ' atm';
+  document.getElementById('b-pv').textContent = Math.round(vol * (180 / vol));
+}
+function upC() {
+  var v = temp * 0.05;
+  document.getElementById('c-t').textContent = temp + ' K';
+  document.getElementById('c-v').textContent = v.toFixed(1) + ' L';
+  document.getElementById('c-vt').textContent = (v / temp).toFixed(3);
+}
+document.getElementById('vol').oninput = function (e) { vol = +e.target.value; upB(); };
+document.getElementById('temp').oninput = function (e) { temp = +e.target.value; upC(); };
+function frame(now) {
+  var dt = Math.min((now - last) / 1000, 0.05); last = now;
+  draw(b, X0 + vol * 6, 130, '#1D9E75', dt);
+  var t = (temp - 200) / 200;
+  draw(ch, X0 + temp * 1.4, 130 * Math.sqrt(temp / 300), 'rgb(' + lerp(55, 216, t) + ',' + lerp(138, 90, t) + ',' + lerp(221, 48, t) + ')', dt);
+  requestAnimationFrame(frame);
+}
+upB(); upC(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
