@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Combined gas law</title>
+<style>
+  :root { --bg:#ffffff; --card:#f4f3ee; --text:#1f1e1d; --muted:#5f5e5a; --edge:#888780; --line:#d3d1c7; --accent:#185fa5; --accent-bg:#e6f1fb; --up:#a32d2d; --down:#185fa5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1f1e1d; --card:#2c2c2a; --text:#f1efe8; --muted:#b4b2a9; --edge:#888780; --line:#444441; --accent:#85b7eb; --accent-bg:#0c447c; --up:#f09595; --down:#85b7eb; }
+  }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); margin:0; padding:24px 16px; }
+  main { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+  .sub { font-size: 14px; color: var(--muted); margin: 0 0 20px; }
+  canvas { width:100%; height:auto; display:block; }
+  .holds { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0 8px; font-size:14px; color:var(--muted); }
+  button { font: inherit; font-size:13px; padding:6px 12px; border:0.5px solid var(--edge); border-radius:8px; background:transparent; color:var(--text); cursor:pointer; }
+  button.on { background:var(--accent-bg); color:var(--accent); border-color:var(--accent); }
+  .law { font-size:13px; color:var(--muted); margin-bottom:8px; min-height:18px; }
+  .srow { display:flex; align-items:center; gap:12px; margin:6px 0; }
+  .srow label { font-size:14px; color:var(--muted); min-width:96px; }
+  .srow input { flex:1; }
+  .srow span { font-size:14px; font-weight:500; min-width:64px; text-align:right; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin:12px 0 16px; }
+  .card { background:var(--card); border-radius:8px; padding:16px; }
+  .lab { font-size:13px; color:var(--muted); }
+  .val { font-size:24px; font-weight:500; }
+  .chg { font-size:13px; color:var(--muted); margin-top:2px; }
+  .chg.up { color:var(--up); }
+  .chg.down { color:var(--down); }
+  .note { font-size:13px; color:var(--muted); line-height:1.6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Combined gas law</h1>
+  <p class="sub">PV ÷ T = constant. Move one slider and another follows.</p>
+
+  <canvas id="comb" width="680" height="200"></canvas>
+
+  <div class="holds">
+    <span>Keep constant:</span>
+    <button id="h-P">Pressure</button>
+    <button id="h-T">Temperature</button>
+    <button id="h-V">Volume</button>
+  </div>
+  <div class="law" id="law"></div>
+
+  <div class="srow"><label for="pr">Pressure</label><input type="range" id="pr" min="0.5" max="4" step="0.1" value="1"><span id="pr-o"></span></div>
+  <div class="srow"><label for="tp">Temperature</label><input type="range" id="tp" min="150" max="450" step="5" value="300"><span id="tp-o"></span></div>
+  <div class="srow"><label for="vo">Volume</label><input type="range" id="vo" min="10" max="120" step="1" value="60"><span id="vo-o"></span></div>
+
+  <div class="cards">
+    <div class="card"><div class="lab">Pressure</div><div class="val" id="p-v"></div><div class="chg" id="p-c"></div></div>
+    <div class="card"><div class="lab">Temperature</div><div class="val" id="t-v"></div><div class="chg" id="t-c"></div></div>
+    <div class="card"><div class="lab">Volume</div><div class="val" id="v-v"></div><div class="chg" id="v-c"></div></div>
+    <div class="card"><div class="lab">PV ÷ T</div><div class="val" id="k-k"></div></div>
+  </div>
+
+  <p class="note">Arrows compare with the start: 1 atm, 300 K, 60 L. Dragging the slider of the constant variable switches the constant to another one. Temperature is in Kelvin. The numbers are simplified for demonstration.</p>
+</main>
+<script>
+var cs = getComputedStyle(document.documentElement);
+var c = document.getElementById('comb').getContext('2d');
+var X0 = 30, Y0 = 30, Y1 = 170, ps = [];
+for (var i = 0; i < 24; i++) {
+  var a = Math.random() * 6.283;
+  ps.push({ x: X0 + 20 + Math.random() * 60, y: Y0 + 10 + Math.random() * (Y1 - Y0 - 20), vx: Math.cos(a), vy: Math.sin(a) });
+}
+var K = 0.2, s = { P: 1, T: 300, V: 60 }, hold = 'P', last = performance.now();
+var lim = { P: [0.5, 4], T: [150, 450], V: [10, 120] };
+var ids = { P: 'pr', T: 'tp', V: 'vo' };
+var laws = {
+  P: "Pressure constant: Charles's law (volume and temperature rise together)",
+  T: "Temperature constant: Boyle's law (pressure and volume move in opposite directions)",
+  V: "Volume constant: Gay-Lussac's law (pressure and temperature rise together)"
+};
+function third(n) {
+  if (n === 'V') return K * s.T / s.P;
+  if (n === 'P') return K * s.T / s.V;
+  return s.P * s.V / K;
+}
+function clamp(n, v) { return Math.min(lim[n][1], Math.max(lim[n][0], v)); }
+function move(driver, val) {
+  if (driver === hold) { hold = (driver === 'T') ? 'P' : 'T'; }
+  var f = ['P', 'T', 'V'].filter(function (n) { return n !== driver && n !== hold; })[0];
+  s[driver] = val;
+  var fv = third(f);
+  if (fv < lim[f][0] || fv > lim[f][1]) { s[f] = clamp(f, fv); s[driver] = third(driver); }
+  else { s[f] = fv; }
+  sync();
+}
+function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+function trend(id, now, start) {
+  var pct = Math.round((now - start) / start * 100), el = document.getElementById(id);
+  if (pct > 0) { el.className = 'chg up'; el.textContent = '↑ ' + pct + '% higher'; }
+  else if (pct < 0) { el.className = 'chg down'; el.textContent = '↓ ' + Math.abs(pct) + '% lower'; }
+  else { el.className = 'chg'; el.textContent = '– no change'; }
+}
+function sync() {
+  ['P', 'T', 'V'].forEach(function (n) {
+    document.getElementById(ids[n]).value = s[n];
+    document.getElementById('h-' + n).className = (hold === n ? 'on' : '');
+  });
+  var pt = s.P.toFixed(1) + ' atm', tt = Math.round(s.T) + ' K', vt = Math.round(s.V) + ' L';
+  document.getElementById('pr-o').textContent = pt;
+  document.getElementById('tp-o').textContent = tt;
+  document.getElementById('vo-o').textContent = vt;
+  document.getElementById('p-v').textContent = pt;
+  document.getElementById('t-v').textContent = tt;
+  document.getElementById('v-v').textContent = vt;
+  document.getElementById('k-k').textContent = (s.P * s.V / s.T).toFixed(3);
+  document.getElementById('law').textContent = laws[hold];
+  trend('p-c', s.P, 1); trend('t-c', s.T, 300); trend('v-c', s.V, 60);
+}
+document.getElementById('pr').oninput = function (e) { move('P', +e.target.value); };
+document.getElementById('tp').oninput = function (e) { move('T', +e.target.value); };
+document.getElementById('vo').oninput = function (e) { move('V', +e.target.value); };
+['P', 'T', 'V'].forEach(function (n) {
+  document.getElementById('h-' + n).onclick = function () { hold = n; sync(); };
+});
+function arrow(x, y, len) {
+  c.strokeStyle = '#378ADD'; c.fillStyle = '#378ADD'; c.lineWidth = 3;
+  c.beginPath(); c.moveTo(x + len, y); c.lineTo(x + 7, y); c.stroke();
+  c.beginPath(); c.moveTo(x, y); c.lineTo(x + 10, y - 6); c.lineTo(x + 10, y + 6); c.closePath(); c.fill();
+}
+function frame(now) {
+  var dt = Math.min((now - last) / 1000, 0.05); last = now;
+  var edge = cs.getPropertyValue('--edge').trim(), solid = cs.getPropertyValue('--muted').trim();
+  var x1 = X0 + s.V * 4, sp = 130 * Math.sqrt(s.T / 300), t = (s.T - 150) / 300;
+  c.clearRect(0, 0, 680, 200);
+  ps.forEach(function (p) {
+    p.x += p.vx * sp * dt; p.y += p.vy * sp * dt;
+    if (p.x < X0 + 5) { p.x = X0 + 5; p.vx = Math.abs(p.vx); }
+    if (p.x > x1 - 5) { p.x = x1 - 5; p.vx = -Math.abs(p.vx); }
+    if (p.y < Y0 + 5) { p.y = Y0 + 5; p.vy = Math.abs(p.vy); }
+    if (p.y > Y1 - 5) { p.y = Y1 - 5; p.vy = -Math.abs(p.vy); }
+  });
+  c.strokeStyle = edge; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(x1, Y0); c.lineTo(X0, Y0); c.lineTo(X0, Y1); c.lineTo(x1, Y1); c.stroke();
+  c.fillStyle = solid; c.fillRect(x1, Y0 - 4, 10, Y1 - Y0 + 8);
+  [60, 100, 140].forEach(function (y) { arrow(x1 + 14, y, 18 * s.P); });
+  c.fillStyle = 'rgb(' + lerp(55, 216, t) + ',' + lerp(138, 90, t) + ',' + lerp(221, 48, t) + ')';
+  ps.forEach(function (p) { c.beginPath(); c.arc(p.x, p.y, 4, 0, 6.283); c.fill(); });
+  requestAnimationFrame(frame);
+}
+sync(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
